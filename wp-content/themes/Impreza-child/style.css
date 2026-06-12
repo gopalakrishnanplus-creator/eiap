@@ -1,0 +1,20 @@
+/*
+Theme Name: Impreza Child
+Template: Impreza
+Version: 1.0
+Author:	UpSolution
+Theme URI: http://impreza.us-themes.com/
+Author URI: http://us-themes.com/
+*/
+
+/*Add your own styles here:*/
+
+div#wpadminbar {
+    display: none;
+}
+html.no-touch.jetpack-lazy-images-js-enabled {
+    margin-top: 0px !important;
+}
+.tribe_events-template-default div#respond {
+    display: block !important;
+}
