@@ -1,0 +1,91 @@
+# =============================================================
+# WordPress .gitignore
+# =============================================================
+
+# -------------------------
+# Core Sensitive Files
+# -------------------------
+wp-config.php
+wp-config-local.php
+.env
+.env.*
+
+# -------------------------
+# Database Dumps
+# -------------------------
+*.sql
+*.sql.gz
+sql/
+db/
+database/
+
+# -------------------------
+# WordPress Core (don't commit core files)
+# -------------------------
+/wp-admin/
+/wp-includes/
+
+# -------------------------
+# Uploads (media files)
+# -------------------------
+wp-content/uploads/
+
+# -------------------------
+# Cache & Generated Files
+# -------------------------
+wp-content/cache/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/object-cache.php
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+debug.log
+wp-content/debug.log
+error_log
+
+# -------------------------
+# OS & Editor Junk
+# -------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# -------------------------
+# Node / Build Tools
+# -------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+build/
+
+# -------------------------
+# Composer
+# -------------------------
+/vendor/
+composer.lock
+
+# -------------------------
+# Backup Files
+# -------------------------
+*.bak
+*.backup
+*.orig
+wp-content/backups/
+
+# -------------------------
+# API Keys / Secrets (extra safety net)
+# -------------------------
+secrets.php
+api-keys.php
+credentials.php
