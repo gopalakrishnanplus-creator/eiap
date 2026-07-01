@@ -621,10 +621,6 @@ class Contact_Form_Plugin {
 						unset( $atts['default'] );
 					}
 
-					if ( ! isset( $atts['showCountrySelector'] ) || ! $atts['showCountrySelector'] ) {
-						unset( $atts['default'] );
-					}
-
 					$input_attrs           = self::get_block_support_classes_and_styles( $block_name, $inner_block['attrs'] );
 					$atts['inputclasses']  = 'wp-block-jetpack-input';
 					$atts['inputclasses'] .= isset( $input_attrs['class'] ) ? ' ' . $input_attrs['class'] : '';
@@ -952,6 +948,7 @@ class Contact_Form_Plugin {
 		$processor = new \WP_HTML_Tag_Processor( $button_blocks_html );
 
 		$processor->next_tag();
+		// @phan-suppress-next-line PhanPluginDuplicateAdjacentStatement -- Intentionally bumping cursor to next tag.
 		$processor->next_tag();
 
 		$processor->set_attribute( 'data-wp-interactive', 'jetpack/form' );
@@ -1639,11 +1636,9 @@ class Contact_Form_Plugin {
 		// Add a filter to replace tokens in the subject field with sanitized field values.
 		add_filter( 'contact_form_subject', array( $this, 'replace_tokens_with_input' ), 10, 2 );
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Checked below for logged-in users only, see https://plugins.trac.wordpress.org/ticket/1859
 		$id   = isset( $_POST['contact-form-id'] ) ? sanitize_text_field( wp_unslash( $_POST['contact-form-id'] ) ) : null;
 		$hash = isset( $_POST['contact-form-hash'] ) ? sanitize_text_field( wp_unslash( $_POST['contact-form-hash'] ) ) : null;
 		$hash = is_string( $hash ) ? preg_replace( '/[^\da-f]/i', '', $hash ) : $hash;
-		// phpcs:enable
 
 		if ( ! is_string( $id ) || ! is_string( $hash ) ) {
 			return Form_Submission_Error::system_error( 'invalid_form_id_or_hash', __( 'Invalid form ID or hash.', 'jetpack-forms' ) );
@@ -2016,8 +2011,10 @@ class Contact_Form_Plugin {
 	 * Enforcement point for outbound-destination authorization on a submitted form.
 	 *
 	 * Destinations declared in the form content — webhooks, the legacy postToUrl attribute and
-	 * the Salesforce integration — are kept only when the source post's author may configure
-	 * them; otherwise they are removed from the form attributes in place, before the submission
+	 * the Salesforce integration — are kept only when whoever placed the form had an
+	 * administrator-level capability (an admin author for post/page forms, or the
+	 * `edit_theme_options` required to author block templates, template parts and widgets);
+	 * otherwise they are removed from the form attributes in place, before the submission
 	 * is processed and the Form_Webhooks / Post_To_Url services read those attributes. The
 	 * mutation is safe because nothing re-reads the original attribute values within the request
 	 * and the form attributes are not persisted after this point.
@@ -2034,7 +2031,8 @@ class Contact_Form_Plugin {
 			return;
 		}
 
-		if ( ! Jetpack_Forms::should_honor_content_destinations( $form->get_source()->get_id() ) ) {
+		$source = $form->get_source();
+		if ( ! Jetpack_Forms::should_honor_content_destinations( $source->get_id(), $source->get_source_type() ) ) {
 			// Drop every content-configured destination before the services read them.
 			// postToUrl and salesforceData are read directly by Post_To_Url.
 			$form->attributes['webhooks']       = array();
@@ -3748,9 +3746,8 @@ class Contact_Form_Plugin {
 				}
 			}
 
-			array_shift( $lines ); // Array
-			array_shift( $lines ); // (
-			array_pop( $lines ); // )
+			array_splice( $lines, 0, 2 ); // Remove first two items: 'Array' and '('.
+			array_pop( $lines ); // Remove last item: ')'.
 			$print_r_output = implode( "\n", $lines );
 
 			// make sure we only match stuff with 4 preceding spaces (stuff for this array and not a nested one

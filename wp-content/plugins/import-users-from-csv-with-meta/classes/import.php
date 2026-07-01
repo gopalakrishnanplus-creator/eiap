@@ -437,7 +437,6 @@ class ACUI_Import{
 
         update_option( "acui_columns", $headers_filtered );
 
-        ACUIHelper()->basic_css();                        
         ACUIHelper()->print_table_header_footer( $headers );
 
         return true;
@@ -539,7 +538,7 @@ class ACUI_Import{
                 if( $user->user_login == $username ){
                     $user_id = $id;
                     
-                    if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() ){
+                    if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() && current_user_can( 'edit_user', $user_id ) ){
                         wp_set_password( $password, $user_id );
                         $password_changed = true;
                     }
@@ -591,7 +590,7 @@ class ACUI_Import{
                 return array( 'result' => 'ignored', 'user_id' => $user_id );
             }
             
-            if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() ){
+            if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() && current_user_can( 'edit_user', $user_id ) ){
                 wp_set_password( $password, $user_id );
                 $password_changed = true;
             }
@@ -629,7 +628,7 @@ class ACUI_Import{
             $data[0] = sprintf( __( 'User already exists as: %s (in this CSV file, it is called: %s)', 'import-users-from-csv-with-meta' ), $user_object->user_login, $username );
             $errors[] = ACUIHelper()->new_error( $row, $data[0], 'warning' );
 
-            if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() ){
+            if( $password !== "" && $settings['update_allow_update_passwords'] == 'yes' && $user_id != get_current_user_id() && current_user_can( 'edit_user', $user_id ) ){
                 wp_set_password( $password, $user_id );
                 $password_changed = true;
             }
@@ -963,16 +962,23 @@ class ACUI_Import{
 
             ob_start();
             ACUIHelper()->print_errors( $errors_for_log );
-            ACUIHelper()->print_results( $results_data, $errors_for_log );
-            ACUIHelper()->print_end_of_process();
-            $results_log_html = ob_get_clean();
+            $html_errors = ob_get_clean();
 
-            // Save full log (rows + results) for the Log tab (manual imports only)
-            $full_log = get_transient( 'acui_import_log_accumulate' );
+            ob_start();
+            ACUIHelper()->print_results( $results_data, $errors_for_log );
+            $html_summary = ob_get_clean();
+
+            $full_log  = get_transient( 'acui_import_log_accumulate' );
+            $html_rows = $full_log !== false ? $full_log : $log;
+
+            // Save structured log for the Log tab (manual imports only)
             update_option( 'acui_last_import_log', array(
-                'date'   => current_time( 'mysql' ),
-                'html'   => ( $full_log !== false ? $full_log : $log ) . $results_log_html,
-                'source' => 'manual',
+                'date'         => current_time( 'mysql' ),
+                'html'         => $html_summary . $html_errors . $html_rows, // legacy fallback
+                'html_rows'    => $html_rows,
+                'html_errors'  => $html_errors,
+                'html_summary' => $html_summary,
+                'source'       => 'manual',
             ), false );
             delete_transient( 'acui_import_log_accumulate' );
 
@@ -1068,11 +1074,14 @@ class ACUI_Import{
             $columns = get_transient( $pfx . 'columns' );
 
             $headers = get_transient( $pfx . 'headers' );
+            if( !is_array( $headers ) ) $headers = array();
             $headers_filtered = get_transient( $pfx . 'headers_filtered' );
             $positions = get_transient( $pfx . 'positions' );
 
             $errors = get_transient( $pfx . 'errors' );
+            if( !is_array( $errors ) ) $errors = array();
             $errors_totals = get_transient( $pfx . 'errors_totals' );
+            if( !is_array( $errors_totals ) ) $errors_totals = array( 'notices' => 0, 'warnings' => 0, 'errors' => 0 );
 
             $results = get_transient( $pfx . 'results' );
             if( !is_array( $results ) ) $results = array( 'created' => 0, 'updated' => 0, 'deleted' => 0, 'ignored' => 0 );
@@ -1088,6 +1097,7 @@ class ACUI_Import{
             if( !is_array( $users_updated ) ) $users_updated = array();
             if( !is_array( $users_ignored ) ) $users_ignored = array();
             if( !is_array( $users_deleted ) ) $users_deleted = array();
+            if( !is_array( $roles_appeared ) ) $roles_appeared = array();
         }
 
         echo '<div class="wrap">';
@@ -1108,6 +1118,19 @@ class ACUI_Import{
         $manager = new SplFileObject( $file );
         if( $initial_row != 0 )
             $manager->seek( $initial_row );
+
+        if( $initial_row != 0 && !$columns ){
+            $header_manager = new SplFileObject( $file );
+            $header_data = $header_manager->fgetcsv( $delimiter );
+            if( is_array( $header_data ) && count( $header_data ) > 1 ){
+                $headers = array();
+                $headers_filtered = array();
+                $positions = array();
+                $this->read_first_row( $header_data, $headers, $positions, $headers_filtered );
+                $columns = count( $header_data );
+            }
+            unset( $header_manager );
+        }
 
         while( $data = $manager->fgetcsv( $delimiter ) ):
             $row++;
@@ -1163,7 +1186,7 @@ class ACUI_Import{
                 }
             }
 
-            if( $limit > 0 && ($row - $initial_row) >= $limit ){
+            if( $limit > 0 && ($row - $initial_row) >= $limit + ($initial_row == 0 ? 1 : 0) ){
                 $this->save_transients( $columns, $headers, $headers_filtered, $positions, $errors, $errors_totals, $results, $users_created, $users_updated, $users_ignored, $roles_appeared, $users_deleted );
 
                 if( $is_cron ){

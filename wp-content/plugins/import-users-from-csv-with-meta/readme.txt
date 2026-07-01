@@ -4,7 +4,7 @@ Donate link: https://codection.com/go/donate-import-users-from-csv-with-meta/
 Tags: import users, export users, csv, migrate users, bulk import
 Requires at least: 5.5
 Tested up to: 7.0
-Stable tag: 2.3.5
+Stable tag: 2.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,29 @@ Plugin will automatically detect:
 5. Extra profile information (user meta)
 
 == Changelog ==
+
+= 2.4 =
+*   Security fix: added `current_user_can('edit_user', $user_id)` check before every `wp_set_password()` call during import, preventing a user with `create_users` access from resetting passwords of accounts they are not authorised to edit
+*   Security fix: DataTables (2.2.2) and Select2 (4.1.0-rc.0) are now bundled locally in the plugin's assets directory instead of being loaded from external CDNs, eliminating the dependency on cdn.datatables.net and cdn.jsdelivr.net in wp-admin
+
+= 2.3.9 =
+*   Fixed fatal error "array_intersect(): Argument #1 must be of type array, bool given" in async cron step 2+ when the roles_appeared transient had expired
+
+= 2.3.8 =
+*   Fixed batch import stopping after 99 users instead of 100 in the first step (header row was counted against the batch limit)
+*   Fixed "Row does not have the same columns as the header" errors in steps 2+ when transient data was lost (cache flush, plugin conflict): header is now re-read from the CSV file as a fallback
+*   Fixed PHP warnings for undefined array keys "errors" in helper.php (line 211) and foreach on bool in helper.php (line 362) caused by expired transients returning false
+
+= 2.3.7 =
+*   Fixed fatal error in Advanced Custom Fields addon when a multiple-value field already arrives as an array instead of a string (explode() type error)
+
+= 2.3.6 =
+*   Redesigned the Log tab: import results are now shown as visual summary cards (Processed / Created / Updated / Deleted / Issues) at the top of the page
+*   Unified the live import view and the Log tab: both now use the same card layout so the experience is consistent
+*   The Issues card turns amber in real time while errors are found during import
+*   Errors, warnings and notices are displayed in a collapsible section with colour-coded badges per type (error, warning, notice)
+*   The import rows table is now collapsed by default in the Log tab to keep the page clean; DataTables initialises lazily when the section is expanded
+*   Backward-compatible: existing logs stored in the old format continue to render correctly
 
 = 2.3.5 =
 *   Fixed a bug where the export shortcode ignored the columns attribute when field names contained spaces (e.g. BuddyBoss xProfile fields with multi-word names)
