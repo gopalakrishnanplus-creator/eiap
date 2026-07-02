@@ -89,3 +89,19 @@ wp-content/backups/
 secrets.php
 api-keys.php
 credentials.php
+
+# -------------------------
+# Local Python / SFTP Deployment Tooling
+# -------------------------
+.venv/
+__pycache__/
+*.py[cod]
+tools/sftp-sync.env
+
+# -------------------------
+# SFTP Sync State / macOS Noise Under wp-content
+# -------------------------
+wp-content/**/.DS_Store
+wp-content/**/__MACOSX/**
+wp-content/.eiap-wp-content-sync-state.json
+wp-content/.eiap-wp-content-sync-state.json.tmp

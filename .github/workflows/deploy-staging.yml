@@ -1,0 +1,99 @@
+name: Deploy wp-content to staging
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-staging.yml"
+      - ".wp-content-syncignore"
+      - "tools/deploy_changed_wp_content.py"
+      - "tools/wp_content_sftp_sync.py"
+      - "tools/requirements-sftp-sync.txt"
+      - "wp-content/**"
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Deployment command to run"
+        required: true
+        default: sync
+        type: choice
+        options:
+          - sync
+          - plan
+          - seed
+          - force-full-sync
+
+concurrency:
+  group: eiap-staging-sftp
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Sync staging over SFTP
+    runs-on: ubuntu-latest
+    env:
+      EIAP_SFTP_HOST: ${{ secrets.EIAP_SFTP_HOST }}
+      EIAP_SFTP_PORT: ${{ secrets.EIAP_SFTP_PORT }}
+      EIAP_SFTP_USERNAME: ${{ secrets.EIAP_SFTP_USERNAME }}
+      EIAP_SFTP_PASSWORD: ${{ secrets.EIAP_SFTP_PASSWORD }}
+      EIAP_SFTP_REMOTE_DIR: ${{ secrets.EIAP_SFTP_REMOTE_DIR }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install SFTP sync dependencies
+        run: python -m pip install -r tools/requirements-sftp-sync.txt
+
+      - name: Validate SFTP secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in EIAP_SFTP_HOST EIAP_SFTP_USERNAME EIAP_SFTP_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is not configured as a repository secret."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "EIAP_SFTP_PORT=${EIAP_SFTP_PORT:-22}" >> "$GITHUB_ENV"
+          echo "EIAP_SFTP_REMOTE_DIR=${EIAP_SFTP_REMOTE_DIR:-htdocs}" >> "$GITHUB_ENV"
+
+      - name: Plan staging delta
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.command == 'plan' }}
+        run: python tools/wp_content_sftp_sync.py plan
+
+      - name: Seed staging sync state
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.command == 'seed' }}
+        run: python tools/wp_content_sftp_sync.py seed
+
+      - name: Force full staging sync
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.command == 'force-full-sync' }}
+        run: python tools/wp_content_sftp_sync.py sync --force-full
+
+      - name: Deploy changed wp-content files after push
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.before }}"
+          if [[ "$base" =~ ^0+$ ]]; then
+            base="$(git rev-list --max-parents=0 HEAD)"
+          fi
+          python tools/deploy_changed_wp_content.py --base "$base" --head "${{ github.sha }}"
+
+      - name: Sync staging manually
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.command == 'sync' }}
+        run: python tools/wp_content_sftp_sync.py sync

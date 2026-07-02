@@ -1,0 +1,7 @@
+# Ignore Finder/macOS noise if it ever appears under wp-content.
+wp-content/**/.DS_Store
+wp-content/**/__MACOSX/**
+
+# Ignore the SFTP sync state marker if it ever appears locally.
+wp-content/.eiap-wp-content-sync-state.json
+wp-content/.eiap-wp-content-sync-state.json.tmp
