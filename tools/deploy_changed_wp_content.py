@@ -85,9 +85,31 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-sync-for-deletes",
         action="store_true",
-        help="Run a full sync when the Git range contains deleted wp-content files.",
+        help="Deprecated. Deleted wp-content files are removed with targeted SFTP deletes.",
     )
     return parser
+
+
+def run_sync_command(
+    repo_root: Path,
+    sync_script: Path,
+    command_name: str,
+    paths: List[str],
+    dry_run: bool = False,
+    verify_upload: bool = False,
+) -> int:
+    if not paths:
+        return 0
+
+    command = [sys.executable, str(sync_script)]
+    if dry_run:
+        command.append("--dry-run")
+
+    command.append(command_name)
+    if command_name == "upload" and verify_upload:
+        command.append("--verify-upload")
+    command.extend(paths)
+    return subprocess.call(command, cwd=str(repo_root))
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -100,27 +122,29 @@ def main(argv: List[str] | None = None) -> int:
         print(f"No wp-content changes found between {args.base} and {args.head}.")
         return 0
 
-    if deletes and not args.allow_sync_for_deletes:
-        print("Deleted wp-content files detected:")
-        for path in deletes:
-            print(f"  - {path}")
-        print("Targeted upload cannot delete remote files. Re-run with --allow-sync-for-deletes to use full sync.")
-        return 2
+    print(
+        f"Deploying {len(uploads)} wp-content upload(s) and {len(deletes)} delete(s) "
+        f"from {args.base}..{args.head}."
+    )
 
-    command = [sys.executable, str(sync_script)]
-    if args.dry_run:
-        command.append("--dry-run")
+    upload_result = run_sync_command(
+        repo_root,
+        sync_script,
+        "upload",
+        uploads,
+        dry_run=args.dry_run,
+        verify_upload=args.verify_upload,
+    )
+    if upload_result != 0:
+        return upload_result
 
-    if deletes:
-        command.append("sync")
-    else:
-        command.append("upload")
-        if args.verify_upload:
-            command.append("--verify-upload")
-        command.extend(uploads)
-
-    print(f"Deploying {len(uploads)} changed wp-content file(s) from {args.base}..{args.head}.")
-    return subprocess.call(command, cwd=str(repo_root))
+    return run_sync_command(
+        repo_root,
+        sync_script,
+        "delete",
+        deletes,
+        dry_run=args.dry_run,
+    )
 
 
 if __name__ == "__main__":

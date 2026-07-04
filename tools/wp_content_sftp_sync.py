@@ -422,6 +422,18 @@ class SftpWpContentSync:
         mode = "dry-run targeted upload" if self.config.dry_run else "targeted upload"
         self.log(f"Completed {mode}: {len(paths)} file(s). Remote state was not read or updated.")
 
+    def delete_targeted_files(self, raw_paths: Iterable[str]) -> None:
+        paths = self.normalize_remote_targets(raw_paths)
+        for relative_path in paths:
+            if relative_path == "wp-content":
+                raise SystemExit("Targeted deletes require file paths under wp-content/, not wp-content itself.")
+            self.remove_remote_file(self.to_remote_path(relative_path))
+            if not self.config.dry_run:
+                self.log(f"Deleted: {relative_path}")
+
+        mode = "dry-run targeted delete" if self.config.dry_run else "targeted delete"
+        self.log(f"Completed {mode}: {len(paths)} file(s). Remote state was not read or updated.")
+
     def normalize_remote_targets(self, raw_paths: Iterable[str], theme_only: bool = False) -> List[str]:
         normalized_paths = []
         for raw_path in raw_paths:
@@ -775,16 +787,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Sync git-tracked EIAP wp-content files to staging over SFTP.")
     parser.add_argument(
         "command",
-        choices=["plan", "sync", "seed", "upload", "scan-remote", "pull"],
+        choices=["plan", "sync", "seed", "upload", "delete", "scan-remote", "pull"],
         help=(
             "plan shows the delta, sync uploads/deletes files, seed writes remote state, "
-            "upload pushes explicit files, scan-remote checks remote metadata, pull downloads remote files"
+            "upload pushes explicit files, delete removes explicit remote files, "
+            "scan-remote checks remote metadata, pull downloads remote files"
         ),
     )
     parser.add_argument(
         "paths",
         nargs="*",
-        help="For upload/pull/scan-remote: one or more wp-content files or directories.",
+        help="For upload/delete/pull/scan-remote: one or more wp-content files or directories.",
     )
     parser.add_argument(
         "--repo-root",
@@ -843,8 +856,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
 
-    commands_with_paths = {"upload", "scan-remote", "pull"}
-    if args.command in {"upload", "pull"} and not args.paths:
+    commands_with_paths = {"upload", "delete", "scan-remote", "pull"}
+    if args.command in {"upload", "delete", "pull"} and not args.paths:
         parser.error(f"{args.command} requires at least one wp-content file or directory path.")
     if args.command not in commands_with_paths and args.paths:
         parser.error(f"{args.command} does not accept file paths.")
@@ -877,6 +890,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
         elif args.command == "upload":
             service.upload_targeted_files(args.paths, verify_upload=args.verify_upload)
+        elif args.command == "delete":
+            service.delete_targeted_files(args.paths)
         elif args.command == "scan-remote":
             service.scan_remote_changes(
                 args.paths,

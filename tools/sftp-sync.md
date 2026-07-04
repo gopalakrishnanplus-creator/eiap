@@ -45,7 +45,7 @@ The tool does not sync:
 - Root files such as `README.md` or `meta.json`.
 - Credentials or local environment files.
 
-Removed Git-tracked files are deleted from staging only when they were present in the previously saved remote state.
+Full `sync` deletes removed Git-tracked files only when they were present in the previously saved remote state. The commit-range deploy wrapper and `delete` command can remove explicit `wp-content/` files without a remote state file.
 
 Reverse pulls are intentionally limited to `wp-content/themes/`. Review `git status` after every pull so added files are intentionally staged or ignored.
 
@@ -118,7 +118,7 @@ On normal pushes to `main`, the workflow runs:
 python tools/deploy_changed_wp_content.py --base <previous-main-sha> --head <pushed-main-sha>
 ```
 
-That uploads added, copied, modified, and renamed tracked `wp-content/` files from the push range. It does not require an existing remote state file and does not perform a broad first-time upload. If the push deletes tracked `wp-content/` files, the wrapper stops so a human can decide whether to run a full manual `sync`.
+That uploads added, copied, modified, and renamed tracked `wp-content/` files from the push range, and removes deleted tracked `wp-content/` files with targeted SFTP deletes. It does not require an existing remote state file and does not perform a broad first-time upload.
 
 ## Commands
 
@@ -144,10 +144,10 @@ Deploy every changed Git-tracked `wp-content/` file from the latest pushed commi
 python3 tools/deploy_changed_wp_content.py --base HEAD~1 --head HEAD
 ```
 
-If the commit deletes tracked `wp-content/` files, the wrapper stops by default because targeted uploads cannot remove remote files. Re-run with `--allow-sync-for-deletes` only after confirming a full sync is intended:
+Delete explicit remote files under `wp-content/`:
 
 ```bash
-python3 tools/deploy_changed_wp_content.py --base HEAD~1 --head HEAD --allow-sync-for-deletes
+python3 tools/wp_content_sftp_sync.py delete wp-content/mu-plugins/example.php
 ```
 
 Fast remote scan for likely WordPress-side theme changes:
@@ -296,7 +296,7 @@ For a quick broad check, run `scan-remote` with no paths. The default scan targe
 
 - Target staging credentials only. Do not use this script directly against live production.
 - Keep real SFTP credentials out of Git and out of shared chat logs.
-- Use targeted `upload` for known file edits.
+- Use targeted `upload` for known file edits and targeted `delete` for known file removals.
 - Use `scan-remote` and targeted `pull` for theme files changed directly in WordPress/staging.
 - Run full `plan` or `sync` only when working on broad changes, deletions, or first-time setup.
 - Commit repository changes before syncing so GitHub remains the source of truth.
